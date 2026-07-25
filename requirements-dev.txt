@@ -1,7 +1,5 @@
 -r requirements.txt
 ast_serialize==0.6.0
-click==8.4.2
-colorama==0.4.6
 django-stubs==6.0.7
 django-stubs-ext==6.0.7
 grimp==3.15

@@ -11,5 +11,9 @@ plugins = ["mypy_django_plugin.main"]
 python_version = "3.13"
 exclude = ["migrations/"]
 
+[[tool.mypy.overrides]]
+module = "celery.*"
+ignore_missing_imports = true
+
 [tool.django-stubs]
 django_settings_module = "config.settings"

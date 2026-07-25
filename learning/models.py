@@ -56,3 +56,33 @@ class LessonEvent(models.Model):
 
     def __str__(self):
         return f"{self.enrollment} — {self.lesson} ({self.event_type})"
+    
+class QuizAttempt(models.Model):
+    enrollment = models.ForeignKey(
+        Enrollment, on_delete=models.CASCADE, related_name="quiz_attempts"
+    )
+    quiz = models.ForeignKey(
+        "catalog.Quiz", on_delete=models.CASCADE, related_name="attempts"
+    )
+    score_percent = models.PositiveIntegerField()
+    passed = models.BooleanField()
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.enrollment} — {self.quiz} ({self.score_percent}%)"
+
+
+class QuizAnswer(models.Model):
+    attempt = models.ForeignKey(QuizAttempt, on_delete=models.CASCADE, related_name="answers")
+    question = models.ForeignKey("catalog.QuizQuestion", on_delete=models.CASCADE)
+    selected_choice = models.ForeignKey("catalog.QuizChoice", on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["attempt", "question"], name="unique_answer_per_question_per_attempt"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.attempt} — Q{self.question_id}"

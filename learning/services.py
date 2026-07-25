@@ -1,6 +1,7 @@
 from django.db import transaction
 
 from .models import QuizAnswer, QuizAttempt
+from .tasks import generate_certificate_pdf
 
 
 class QuizMismatchError(Exception):
@@ -12,10 +13,6 @@ class MissingAnswerError(Exception):
 
 
 def submit_quiz_attempt(enrollment, quiz, answers):
-    """
-    answers: dict mapping question_id -> choice_id, one entry expected per
-    question in the quiz.
-    """
     if enrollment.course_id != quiz.course_id:
         raise QuizMismatchError("This quiz does not belong to the enrolled course.")
 
@@ -44,5 +41,8 @@ def submit_quiz_attempt(enrollment, quiz, answers):
         attempt.score_percent = score_percent
         attempt.passed = score_percent >= quiz.passing_score_percent
         attempt.save(update_fields=["score_percent", "passed"])
+
+    if attempt.passed:
+        transaction.on_commit(lambda: generate_certificate_pdf.delay(attempt.id))
 
     return attempt

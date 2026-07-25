@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Enrollment, LessonEvent
+from .models import Certificate, Enrollment, LessonEvent
 
 
 @admin.register(Enrollment)
@@ -13,6 +13,17 @@ class EnrollmentAdmin(admin.ModelAdmin):
 class LessonEventAdmin(admin.ModelAdmin):
     list_display = ["enrollment", "lesson", "event_type", "created_at"]
     list_filter = ["event_type"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Certificate)
+class CertificateAdmin(admin.ModelAdmin):
+    list_display = ["attempt", "issued_at"]
 
     def has_add_permission(self, request):
         return False

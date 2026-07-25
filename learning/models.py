@@ -72,6 +72,17 @@ class QuizAttempt(models.Model):
         return f"{self.enrollment} — {self.quiz} ({self.score_percent}%)"
 
 
+class Certificate(models.Model):
+    attempt = models.OneToOneField(
+        "learning.QuizAttempt", on_delete=models.CASCADE, related_name="certificate"
+    )
+    pdf = models.FileField(upload_to="certificates/")
+    issued_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Certificate for {self.attempt}"
+
+
 class QuizAnswer(models.Model):
     attempt = models.ForeignKey(QuizAttempt, on_delete=models.CASCADE, related_name="answers")
     question = models.ForeignKey("catalog.QuizQuestion", on_delete=models.CASCADE)

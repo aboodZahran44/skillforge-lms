@@ -1,5 +1,6 @@
 from django.contrib import admin, messages
 
+from . import services
 from .models import Course, Lesson, Quiz, QuizChoice, QuizQuestion, Section
 
 
@@ -32,18 +33,23 @@ class CourseAdmin(admin.ModelAdmin):
 
     @admin.action(description="Approve selected courses")
     def approve_courses(self, request, queryset):
-        not_ready = queryset.exclude(status=Course.Status.PENDING_REVIEW)
-        if not_ready.exists():
+        approved = 0
+        skipped = 0
+        for course in queryset:
+            try:
+                services.approve_course(course)
+                approved += 1
+            except services.CourseNotPendingReview:
+                skipped += 1
+
+        if skipped:
             self.message_user(
                 request,
                 "Only courses with status 'Pending review' can be approved. "
-                f"Skipped {not_ready.count()} course(s).",
+                f"Skipped {skipped} course(s).",
                 level=messages.WARNING,
             )
-
-        ready = queryset.filter(status=Course.Status.PENDING_REVIEW)
-        updated = ready.update(status=Course.Status.PUBLISHED)
-        self.message_user(request, f"Approved {updated} course(s).", level=messages.SUCCESS)
+        self.message_user(request, f"Approved {approved} course(s).", level=messages.SUCCESS)
 
 
 @admin.register(Section)

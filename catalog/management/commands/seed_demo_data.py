@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
+from elasticsearch.exceptions import ConnectionError as ESConnectionError
 
+from catalog import search
 from catalog.models import Course, Lesson, Section
 
 User = get_user_model()
@@ -118,5 +120,15 @@ class Command(BaseCommand):
                     )
 
             self.stdout.write(self.style.SUCCESS(f"Seeded: {course.title}"))
+
+        try:
+            search.ensure_index()
+            for course in Course.objects.filter(status=Course.Status.PUBLISHED):
+                search.index_course(course)
+            self.stdout.write(self.style.SUCCESS("Indexed published courses."))
+        except ESConnectionError:
+            self.stderr.write(
+                self.style.WARNING("Elasticsearch unreachable; skipped search indexing.")
+            )
 
         self.stdout.write(self.style.SUCCESS("Demo data seeding complete."))

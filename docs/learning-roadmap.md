@@ -1,12 +1,12 @@
 # SkillForge — Learning Roadmap (build in this order)
 
-Tag releases per phase; keep ADRs in `docs/decisions/`. **Honest timeline: ~15–16 weeks part-time.** The original 11-week plan silently assumed you already know Django, DRF, Celery, ES, Stripe, Next.js, FastAPI, LangChain, and AWS — if you did, you wouldn't need the project. Overrunning a fake deadline is how learning projects get abandoned; pad it up front instead.
+Tag releases per phase; keep ADRs in `docs/decisions/`. **Honest timeline: ~15–16 weeks part-time.** The original 11-week plan silently assumed you already know Django, DRF, Celery, ES, Stripe, Next.js, FastAPI, LangChain, and production Docker ops — if you did, you wouldn't need the project. Overrunning a fake deadline is how learning projects get abandoned; pad it up front instead.
 
 ## Phase 1 — Foundations + Walking Skeleton (weeks 1–3)
 - Project scaffold, custom user model, `accounts` + `orgs` apps with services/selectors layering.
 - Seat licensing: **DB constraints first** (unique constraints, seat-count CHECK), then `select_for_update` on the license row; concurrent race-condition test proving overselling is impossible *and* that the constraint holds when the service layer is bypassed. (Seed licenses via fixture — purchases don't exist until phase 3.)
 - Docker Compose (web, postgres, redis), pytest-django, ruff/mypy, import-linter.
-- **Deploy the walking skeleton now:** GitHub Actions → build → migrate → deploy a hello-world Django to Beanstalk/ECS, smoke test. Sentry + structured logging wired. Deploying in the last phase means debugging every environment problem at once, at the end, when motivation is lowest.
+- **Deploy the walking skeleton now:** GitHub Actions → build → migrate → deploy a hello-world Django to the self-hosted Docker target (VPS behind Nginx), smoke test. Sentry + structured logging wired. Deploying in the last phase means debugging every environment problem at once, at the end, when motivation is lowest.
 - **You learn:** Django properly, clean layering, transactional integrity via constraints (not just locks), CI/CD before there's much to deploy.
 
 ## Phase 2 — Catalog, Learning & Admin Panel (weeks 4–6)
@@ -31,10 +31,10 @@ Tag releases per phase; keep ADRs in `docs/decisions/`. **Honest timeline: ~15�
 
 ## Phase 5 — Frontend & Org Dashboard (weeks 11–12)
 - **Auth ADR first** (session-cookie + CSRF vs JWT) — retrofitting frontend auth mid-build is a classic week-loss.
-- Next.js learner app: catalog/search UI (handles `degraded` mode), video player (CloudFront signed URLs), quiz flow, tutor chat.
+- Next.js learner app: catalog/search UI (handles `degraded` mode), video player (protected media via Nginx `X-Accel-Redirect`), quiz flow, tutor chat.
 - **Instructor course builder v1 = Django Admin.** The custom drag-and-drop builder is a stretch goal; it's a multi-week React project that teaches none of the target skills.
-- Customer-facing org dashboard: seats, progress heatmap, compliance report export (Celery + SES) — all behind the tenancy scoping from phase 2.
-- **You learn:** full-stack integration against DRF, S3 presigned uploads, signed content delivery.
+- Customer-facing org dashboard: seats, progress heatmap, compliance report export (Celery + SMTP email) — all behind the tenancy scoping from phase 2.
+- **You learn:** full-stack integration against DRF, protected content delivery through the reverse proxy.
 
 ## Phase 6 — Tutor Extraction to FastAPI (weeks 13–14)
 - Extract the phase-4 tutor app into `tutor-service` (FastAPI): now the strangler ADR is real — why this piece, why now, what stayed.
@@ -46,7 +46,7 @@ Tag releases per phase; keep ADRs in `docs/decisions/`. **Honest timeline: ~15�
 ## Phase 7 — Hardening & Performance (weeks 15–16)
 - k6 load tests on catalog + enrollment; N+1 hunt with `assertNumQueries`; `docs/performance.md` with before/after numbers.
 - Observability completion: Celery queue-depth + failure alarms, webhook-failure alarm, deep health checks in smoke tests.
-- Cost review against the phase-1 budget table; RDS restore drill (a backup you've never restored is a hope).
+- Postgres restore drill from the nightly `pg_dump` backups (a backup you've never restored is a hope).
 - **You learn:** monolith ops, safe migrations at steady state, query optimization, and proving the system works rather than assuming it.
 
 ## Stretch Goals
@@ -56,4 +56,4 @@ Tag releases per phase; keep ADRs in `docs/decisions/`. **Honest timeline: ~15�
 - Read replica for analytics; measure replication-lag implications.
 
 ## Interview Story This Project Gives You
-"I built a B2B learning marketplace as a modular Django monolith — constraint-backed race-safe seat licensing, tenant-isolation tests in CI, idempotent and out-of-order-tolerant Stripe webhooks with reconciliation, Elasticsearch with a defined degradation mode — built the AI tutor inside the monolith with course-scoped RAG, ingestion-time quiz exclusion, and prompt-injection tests, then extracted it to a FastAPI service with the strangler pattern behind a JWT-scoped trust boundary, deployed continuously to AWS from week one."
+"I built a B2B learning marketplace as a modular Django monolith — constraint-backed race-safe seat licensing, tenant-isolation tests in CI, idempotent and out-of-order-tolerant Stripe webhooks with reconciliation, Elasticsearch with a defined degradation mode — built the AI tutor inside the monolith with course-scoped RAG, ingestion-time quiz exclusion, and prompt-injection tests, then extracted it to a FastAPI service with the strangler pattern behind a JWT-scoped trust boundary, deployed continuously to a self-hosted Docker environment from week one."

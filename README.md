@@ -28,15 +28,15 @@ The AI tutor is **built inside the monolith first** (phase 4) and extracted to a
 | Full stack | Next.js (React) learner frontend consuming DRF API |
 | Docker | Compose: web, worker, beat, postgres, redis, elasticsearch, tutor-service |
 | CI/CD | GitHub Actions from **phase 1** — a walking skeleton deploys before the features exist |
-| AWS | Elastic Beanstalk **or** ECS (ADR), RDS, ElastiCache, S3 + CloudFront, SES — with a cost table and budget alarm from day one |
+| Deployment | Self-hosted Docker: Compose behind Nginx (TLS via Let's Encrypt) on a VPS; Postgres, Redis, and Elasticsearch as containers with volumes and a tested backup/restore routine |
 | Gateways | Nginx as reverse proxy/static gateway |
 
-**Bonus skills baked in:** Celery + Beat (compliance reports, certificates), Stripe test-mode payments (signature-verified, idempotent, **out-of-order-tolerant** webhooks + reconciliation), multi-tenant isolation with IDOR tests in CI, observability (Sentry, structured logs, queue-depth alarms), feature flags, S3 presigned upload + CloudFront signed URLs, PDF certificates, i18n, N+1 prevention enforced in CI.
+**Bonus skills baked in:** Celery + Beat (compliance reports, certificates), Stripe test-mode payments (signature-verified, idempotent, **out-of-order-tolerant** webhooks + reconciliation), multi-tenant isolation with IDOR tests in CI, observability (Sentry, structured logs, queue-depth alarms), feature flags, protected media downloads via Nginx `X-Accel-Redirect`, PDF certificates, i18n, N+1 prevention enforced in CI.
 
 ## High-Level Architecture
 
 ```
-                    CloudFront (video/static, signed URLs)
+                    Nginx (TLS, static/protected media)
                            │
  Next.js frontend ──▶ Nginx ──▶ Django monolith (DRF + Django Admin)
         │                       │  apps: accounts, orgs, catalog, learning,
@@ -75,10 +75,10 @@ gh repo create skillforge-lms --public --source=. --push
 - [ ] Learner can browse (ES search, with tested Postgres degradation mode), enroll via seat license, complete lessons, take quizzes, get a PDF certificate
 - [ ] Seat limits held by DB constraints + row locks — concurrent race test passes, and the constraint holds even when the service layer is bypassed
 - [ ] Tenancy: IDOR test suite proves no cross-org data access on every org-scoped endpoint
-- [ ] Org admin dashboard: seat usage, per-employee progress, compliance report export (Celery task, emailed via SES)
+- [ ] Org admin dashboard: seat usage, per-employee progress, compliance report export (Celery task, emailed via SMTP — Mailpit locally)
 - [ ] Django Admin: queryset-scoped staff roles, course approval workflow, refund action (with a written refund-side-effects policy) with audit trail, hardened impersonation
 - [ ] AI tutor: cross-course isolation test, quiz-corpus-exclusion test, prompt-injection test against hostile lesson content, per-user token budget enforced — all in CI
 - [ ] Stripe: signature-verified, idempotent, out-of-order-tolerant webhooks; reconciliation task diffs local state against Stripe
 - [ ] Zero N+1 queries on the 5 hottest endpoints (`assertNumQueries` in CI)
-- [ ] CI/CD deploys to AWS **from phase 1**; no-downtime migration pattern documented *and exercised* by at least one real additive→code→destructive migration
+- [ ] CI/CD deploys to the self-hosted target **from phase 1**; no-downtime migration pattern documented *and exercised* by at least one real additive→code→destructive migration
 - [ ] Observability: Sentry wired across Django/Celery/tutor-service; Celery queue-depth and webhook-failure alarms exist

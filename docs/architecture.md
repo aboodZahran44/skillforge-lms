@@ -60,7 +60,7 @@ app/
 - **Idempotency:** `UniqueConstraint(enrollment, lesson, event_type)` on completion events — client retries and double-taps must not inflate progress past 100%.
 - **Materialization:** per-enrollment Celery task, serialized per enrollment (dedupe by `enrollment_id` task key) so two events for the same enrollment can't race on the materialized row.
 - **The eventual-consistency trap:** certificate issuance must NOT read `EnrollmentProgress` (it may lag). `issue_certificate` recomputes completion from `LessonEvent` inside its own transaction. Materialized progress is for dashboards only — document this read-path split.
-- **Growth:** `LessonEvent` is unbounded. Note the archival plan (partition by month or archive to S3 after materialization) even if you don't build it.
+- **Growth:** `LessonEvent` is unbounded. Note the archival plan (partition by month or export to cold storage after materialization) even if you don't build it.
 
 ### Money — immutable rows + a defined current state
 
@@ -121,7 +121,7 @@ browser ──SSE, JWT──▶ tutor-service (FastAPI)
 
 ## 7. Frontend & Admin
 
-- **Next.js** learner app: catalog, video player (CloudFront signed URLs, short TTL — accept that signed URLs are shareable within their lifetime and say so), quiz UI, tutor chat.
+- **Next.js** learner app: catalog, video player (protected media via Nginx `X-Accel-Redirect` — Django authorizes the request, Nginx serves the file), quiz UI, tutor chat.
 - **Frontend↔DRF auth is a decision, not a detail:** default to session-cookie auth with CSRF (same-site deployment behind one domain) — document it in an ADR before phase 5, because retrofitting auth mid-frontend-build is a classic week-loss.
 - **Instructor course builder v1 is Django Admin**, not a custom Next.js editor. A drag-and-drop curriculum builder is a multi-week project by itself and teaches you React, not the target skills. Next.js builder = stretch goal.
 - **Django Admin** as the internal back-office:
@@ -134,17 +134,16 @@ browser ──SSE, JWT──▶ tutor-service (FastAPI)
 
 - **Errors:** Sentry from phase 1 (Django, Celery, and later tutor-service), release-tagged.
 - **Logs:** structured JSON logs with request IDs; a request ID propagated on the Django→tutor-service hop so one conversation is traceable across both.
-- **Metrics/alarms:** queue depth + task failure rate for Celery (a silently dead worker is the #1 "why is nothing happening" incident), RDS CPU/connections, 5xx rate, webhook failure alarm.
+- **Metrics/alarms:** queue depth + task failure rate for Celery (a silently dead worker is the #1 "why is nothing happening" incident), Postgres CPU/connections, 5xx rate, webhook failure alarm.
 - **Health:** `/health` (shallow) and `/health/deep` (DB/Redis/ES) endpoints; smoke test hits them post-deploy.
 
-## 9. AWS Deployment
+## 9. Deployment (self-hosted Docker)
 
-- Start on **Elastic Beanstalk** (or ECS if you prefer one less new thing) — a monolith doesn't need K8s; write the ADR.
-- RDS Postgres (+ pgvector), ElastiCache Redis, S3 + CloudFront, SES. **Search: self-host ES in a container first; managed OpenSearch is the most expensive line item on this stack** (multi-AZ OpenSearch alone can exceed everything else combined).
-- **Cost table in the repo:** estimate monthly cost per component before deploying, plus the classic surprises: NAT gateway hourly+data charges (ECS in private subnets), CloudFront egress, RDS storage autoscaling. Budget alarm on day one.
-- **Backups/DR:** RDS automated snapshots + a documented restore drill (a backup you've never restored is a hope, not a backup); S3 versioning on certificates.
+- One VPS running Docker Compose behind **Nginx** (reverse proxy, TLS via Let's Encrypt, static + protected media) — a monolith doesn't need K8s or a cloud provider; knowing when a single well-run box is enough is a senior skill. Write the ADR.
+- Postgres (+ pgvector), Redis, and a single-node Elasticsearch as containers with named volumes and bounded ES heap. Email via SMTP (Mailpit in dev, any SMTP provider in prod). Media (certificates, uploads) on a Docker volume under `MEDIA_ROOT`; if S3-compatible object storage is ever needed, self-host MinIO.
+- **Backups/DR:** nightly `pg_dump` (cron container) shipped off-box, plus a documented **restore drill** (a backup you've never restored is a hope, not a backup); media volume included in the backup routine.
 - Celery worker + beat as separate processes of the same image.
-- **CI/CD:** GitHub Actions — ruff/mypy → pytest (Postgres/Redis services) → build image → migrate (no-downtime pattern: additive first, code second, destructive later) → deploy → smoke test. **The pipeline and a deployed walking skeleton exist from phase 1** — deploying for the first time in the final phase means discovering every environment problem at once.
+- **CI/CD:** GitHub Actions — ruff/mypy → pytest (Postgres/Redis services) → build image → push to registry → SSH deploy → migrate (no-downtime pattern: additive first, code second, destructive later) → smoke test. **The pipeline and a deployed walking skeleton exist from phase 1** — deploying for the first time in the final phase means discovering every environment problem at once.
 
 ## 10. Performance Discipline
 

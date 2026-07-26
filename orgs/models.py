@@ -37,7 +37,12 @@ class SeatAssignment(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="seat_assignments"
     )
+    order = models.ForeignKey(
+        "orders.Order", on_delete=models.PROTECT, related_name="seat_assignments",
+        null=True, blank=True,
+    )
     assigned_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [

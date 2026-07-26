@@ -1,12 +1,10 @@
 from django.conf import settings
 from django.db import transaction
-from langchain_openai import OpenAIEmbeddings
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pgvector.django import L2Distance
 
 from .models import LessonChunk
-
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 _CHUNK_SIZE = 500
 

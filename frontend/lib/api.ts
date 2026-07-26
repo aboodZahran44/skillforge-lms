@@ -26,6 +26,20 @@ export interface SearchResponse {
   degraded: boolean;
 }
 
+export interface OrgEmployee {
+  email: string;
+  full_name: string;
+  course: string;
+  lessons_completed: number;
+  certificate_earned: boolean;
+}
+
+export interface OrgDashboard {
+  organization: string;
+  seat_usage: { total_seats: number; seats_used: number };
+  employees: OrgEmployee[];
+}
+
 // Django rotates the CSRF token on login, so the cached value is invalidated
 // after auth state changes and refreshed on demand.
 let csrfToken: string | null = null;
@@ -135,4 +149,15 @@ export function askTutor(courseId: string, question: string): Promise<{ answer: 
     method: "POST",
     body: { question },
   });
+}
+
+export function getOrgDashboard(orgId: string): Promise<OrgDashboard> {
+  return request<OrgDashboard>(`/api/orgs/${orgId}/dashboard/`);
+}
+
+// The compliance report is a direct CSV download (Content-Disposition:
+// attachment) — a plain same-site anchor navigation carries the session
+// cookie, so no fetch/blob dance is needed.
+export function complianceReportUrl(orgId: string): string {
+  return `${API_BASE}/api/orgs/${orgId}/compliance-report/`;
 }

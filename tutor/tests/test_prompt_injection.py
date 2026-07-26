@@ -2,9 +2,9 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from learning.models import Enrollment
 from tutor.services import ask_tutor, ingest_course
 
+Enrollment = apps.get_model("learning", "Enrollment")
 Course = apps.get_model("catalog", "Course")
 Section = apps.get_model("catalog", "Section")
 Lesson = apps.get_model("catalog", "Lesson")

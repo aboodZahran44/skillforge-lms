@@ -2,9 +2,9 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from learning.models import Enrollment
 from tutor.services import NotEnrolledError, retrieve_relevant_chunks
 
+Enrollment = apps.get_model("learning", "Enrollment")
 Course = apps.get_model("catalog", "Course")
 Organization = apps.get_model("orgs", "Organization")
 User = get_user_model()

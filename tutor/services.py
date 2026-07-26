@@ -1,3 +1,4 @@
+import redis as redis_lib
 from django.conf import settings
 from django.db import transaction
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -83,6 +84,8 @@ Course material:
 
 
 def ask_tutor(course_id, question, enrollment):
+    
+    check_and_increment_rate_limit(enrollment.user_id)
     chunks = retrieve_relevant_chunks(course_id, question, enrollment)
 
     if not chunks:
@@ -97,3 +100,30 @@ def ask_tutor(course_id, question, enrollment):
     ]
     response = chat.invoke(messages)
     return response.content
+
+class RateLimitExceededError(Exception):
+    pass
+
+
+_redis_client = None
+
+
+def _get_redis_client():
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = redis_lib.from_url(settings.REDIS_URL)
+    return _redis_client
+
+
+def check_and_increment_rate_limit(user_id, limit=10, window_seconds=3600):
+    client = _get_redis_client()
+    key = f"tutor_rate_limit:{user_id}"
+
+    count = client.incr(key)
+    if count == 1:
+        client.expire(key, window_seconds)
+
+    if count > limit:
+        raise RateLimitExceededError(
+            f"You've reached the limit of {limit} tutor questions per hour."
+        )

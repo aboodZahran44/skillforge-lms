@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'catalog',
     'learning',
     'orders',
+    'tutor',
 ]
 
 MIDDLEWARE = [
@@ -145,3 +146,5 @@ STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
+# OpenAI
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")

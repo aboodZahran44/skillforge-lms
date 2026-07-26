@@ -155,3 +155,5 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 CSRF_TRUSTED_ORIGINS = ["http://localhost:3000"]
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]
 CORS_ALLOW_CREDENTIALS = True
+
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "")

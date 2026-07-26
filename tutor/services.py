@@ -7,6 +7,9 @@ from pgvector.django import L2Distance
 
 from .models import LessonChunk
 
+import jwt
+from django.utils import timezone
+
 _CHUNK_SIZE = 500
 
 
@@ -127,3 +130,14 @@ def check_and_increment_rate_limit(user_id, limit=10, window_seconds=3600):
         raise RateLimitExceededError(
             f"You've reached the limit of {limit} tutor questions per hour."
         )
+        
+def issue_tutor_token(enrollment):
+    now = timezone.now()
+    payload = {
+        "user_id": enrollment.user_id,
+        "course_id": enrollment.course_id,
+        "enrollment_id": enrollment.id,
+        "iat": now,
+        "exp": now + timezone.timedelta(minutes=5),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")

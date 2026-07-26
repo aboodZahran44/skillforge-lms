@@ -7,6 +7,7 @@ from django.views.decorators.http import require_POST
 
 from .services import NotEnrolledError, RateLimitExceededError, ask_tutor
 
+from .services import NotEnrolledError, RateLimitExceededError, ask_tutor, issue_tutor_token
 
 @csrf_protect
 @require_POST
@@ -36,3 +37,17 @@ def ask_tutor_view(request, course_id):
         return JsonResponse({"error": str(e)}, status=status)
 
     return JsonResponse({"answer": answer})
+
+@require_GET
+def tutor_token_view(request, course_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Authentication required."}, status=401)
+
+    Enrollment = apps.get_model("learning", "Enrollment")
+    try:
+        enrollment = Enrollment.objects.get(user=request.user, course_id=course_id)
+    except Enrollment.DoesNotExist:
+        return JsonResponse({"error": "You are not enrolled in this course."}, status=403)
+
+    token = issue_tutor_token(enrollment)
+    return JsonResponse({"token": token, "expires_in_seconds": 300})

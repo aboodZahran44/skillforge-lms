@@ -50,3 +50,19 @@ class SeatAssignment(models.Model):
                 fields=["seat_license", "user"], name="unique_user_per_license"
             ),
         ]
+        
+class OrgAdmin(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="org_admin_roles"
+    )
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="admins"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "organization"], name="unique_org_admin"),
+        ]
+
+    def __str__(self):
+        return f"{self.user} admin of {self.organization}"

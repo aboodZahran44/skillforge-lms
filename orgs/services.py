@@ -50,3 +50,34 @@ def revoke_seats_for_order(order):
             seat_license.save(update_fields=["seats_used"])
 
     return revoked_count
+
+def get_org_dashboard_data(organization):
+    from django.apps import apps
+
+    Enrollment = apps.get_model("learning", "Enrollment")
+    LessonEvent = apps.get_model("learning", "LessonEvent")
+    Certificate = apps.get_model("learning", "Certificate")
+
+    licenses = organization.seat_licenses.all()
+    total_seats = sum(lic.total_seats for lic in licenses)
+    seats_used = sum(lic.seats_used for lic in licenses)
+
+    employees = []
+    for enrollment in Enrollment.objects.for_org(organization).select_related("user", "course"):
+        lessons_completed = LessonEvent.objects.filter(enrollment=enrollment).count()
+        has_certificate = Certificate.objects.filter(attempt__enrollment=enrollment).exists()
+        employees.append(
+            {
+                "email": enrollment.user.email,
+                "full_name": enrollment.user.full_name,
+                "course": enrollment.course.title,
+                "lessons_completed": lessons_completed,
+                "certificate_earned": has_certificate,
+            }
+        )
+
+    return {
+        "organization": organization.name,
+        "seat_usage": {"total_seats": total_seats, "seats_used": seats_used},
+        "employees": employees,
+    }

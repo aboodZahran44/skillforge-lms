@@ -1,6 +1,7 @@
 from django.db import transaction
 
 from .models import QuizAnswer, QuizAttempt
+from .selectors import is_course_complete
 from .tasks import generate_certificate_pdf
 
 
@@ -42,7 +43,7 @@ def submit_quiz_attempt(enrollment, quiz, answers):
         attempt.passed = score_percent >= quiz.passing_score_percent
         attempt.save(update_fields=["score_percent", "passed"])
 
-    if attempt.passed:
+    if attempt.passed and is_course_complete(enrollment):
         transaction.on_commit(lambda: generate_certificate_pdf.delay(attempt.id))
 
     return attempt

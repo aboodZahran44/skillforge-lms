@@ -4,10 +4,12 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from learning.models import Certificate, Enrollment, QuizAttempt
+from learning.models import Certificate, Enrollment, LessonEvent, QuizAttempt
 from learning.tasks import generate_certificate_pdf
 
 Course = apps.get_model("catalog", "Course")
+Section = apps.get_model("catalog", "Section")
+Lesson = apps.get_model("catalog", "Lesson")
 Quiz = apps.get_model("catalog", "Quiz")
 Organization = apps.get_model("orgs", "Organization")
 
@@ -23,10 +25,13 @@ class GenerateCertificatePdfTest(TestCase):
             email="learner@example.com", password="x", full_name="Learner One"
         )
         course = Course.objects.create(title="Course", slug="course", instructor=instructor)
+        section = Section.objects.create(course=course, title="Only section", order=1)
+        self.lesson = Lesson.objects.create(section=section, title="Only lesson", order=1)
         self.quiz = Quiz.objects.create(course=course, title="Final")
         self.enrollment = Enrollment.objects.create(
             user=learner, course=course, organization=org
         )
+        LessonEvent.objects.create(enrollment=self.enrollment, lesson=self.lesson)
 
     def _attempt(self, passed=True, score=90):
         return QuizAttempt.objects.create(

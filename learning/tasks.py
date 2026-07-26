@@ -19,6 +19,11 @@ def generate_certificate_pdf(attempt_id):
     if not attempt.passed:
         return None
 
+    from .selectors import is_course_complete
+
+    if not is_course_complete(attempt.enrollment):
+        return None
+
     existing = Certificate.objects.filter(attempt=attempt).first()
     if existing is not None:
         return existing.id

@@ -157,3 +157,7 @@ CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]
 CORS_ALLOW_CREDENTIALS = True
 
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "")
+
+TUTOR_SERVICE_URL = os.environ.get("TUTOR_SERVICE_URL", "http://localhost:8001")
+INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
+

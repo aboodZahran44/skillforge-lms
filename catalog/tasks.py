@@ -20,3 +20,12 @@ def sync_course_to_index(course_id):
         return
 
     search.index_course(course)
+
+@shared_task
+def sync_course_to_tutor_service_task(course_id):
+    Course = apps.get_model("catalog", "Course")
+    course = Course.objects.get(id=course_id)
+
+    from tutor.services import sync_course_to_tutor_service
+
+    sync_course_to_tutor_service(course)

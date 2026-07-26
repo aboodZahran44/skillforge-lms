@@ -54,6 +54,8 @@ services:
       POSTGRES_PASSWORD: postgres
       REDIS_URL: redis://redis:6379/0
       ELASTICSEARCH_URL: http://elasticsearch:9200
+      TUTOR_SERVICE_URL: http://host.docker.internal:8001
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
     depends_on:
       - db
       - redis

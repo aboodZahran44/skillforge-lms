@@ -16,7 +16,11 @@ class SeatRevocationTest(TestCase):
             organization=self.org, total_seats=3, seats_used=0
         )
         self.order = Order.objects.create(
-            organization=self.org, seat_quantity=3, amount_cents=3000
+            organization=self.org,
+            seat_quantity=3,
+            amount_cents=3000,
+            status=Order.Status.PAID,
+            seat_license=self.license,
         )
         self.user_a = User.objects.create_user(email="a@example.com", password="x")
         self.user_b = User.objects.create_user(email="b@example.com", password="x")
@@ -48,3 +52,13 @@ class SeatRevocationTest(TestCase):
 
         self.license.refresh_from_db()
         self.assertEqual(self.license.seats_used, 1)  # user_b باقي، user_a انلغى بس
+
+    def test_cannot_assign_seat_from_refunded_orders_license(self):
+        from orgs.services import SeatLicenseInactiveError
+
+        assign_seat(self.license.id, self.user_a, order=self.order)
+        self.order.status = Order.Status.REFUNDED
+        self.order.save(update_fields=["status"])
+
+        with self.assertRaises(SeatLicenseInactiveError):
+            assign_seat(self.license.id, self.user_b, order=self.order)

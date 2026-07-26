@@ -7,9 +7,20 @@ class NoSeatsAvailable(Exception):
     pass
 
 
+class SeatLicenseInactiveError(Exception):
+    pass
+
+
 def assign_seat(seat_license_id, user, order=None):
     with transaction.atomic():
         seat_license = SeatLicense.objects.select_for_update().get(id=seat_license_id)
+
+        owning_order = getattr(seat_license, "order", None)
+        if owning_order is not None and owning_order.status != owning_order.Status.PAID:
+            raise SeatLicenseInactiveError(
+                f"Seat license belongs to an order with status '{owning_order.status}', "
+                "not 'paid'."
+            )
 
         if seat_license.seats_used >= seat_license.total_seats:
             raise NoSeatsAvailable

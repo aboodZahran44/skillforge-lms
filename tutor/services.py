@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import transaction
 from langchain_openai import OpenAIEmbeddings
+from pgvector.django import L2Distance
 
 from .models import LessonChunk
 
@@ -50,3 +51,22 @@ def ingest_course(course):
         for lesson in section.lessons.all():
             total += ingest_lesson(lesson)
     return total
+
+class NotEnrolledError(Exception):
+    """Raised when the user tries to query a course they aren't enrolled in."""
+
+
+def retrieve_relevant_chunks(course_id, question, enrollment, top_k=3):
+    if enrollment.course_id != course_id:
+        raise NotEnrolledError("You can only ask questions about a course you're enrolled in.")
+
+    embeddings_client = OpenAIEmbeddings(
+        model="text-embedding-3-small", api_key=settings.OPENAI_API_KEY
+    )
+    question_vector = embeddings_client.embed_query(question)
+
+    chunks = (
+        LessonChunk.objects.filter(course_id=course_id)
+        .order_by(L2Distance("embedding", question_vector))[:top_k]
+    )
+    return list(chunks)

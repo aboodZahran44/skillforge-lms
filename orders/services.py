@@ -1,7 +1,11 @@
+import stripe
 from django.apps import apps
+from django.conf import settings
 from django.db import IntegrityError, transaction
 
 from .models import Order, Payment
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 class InvalidOrderAmountError(Exception):
@@ -18,6 +22,33 @@ def create_pending_order(organization, seat_quantity, price_per_seat_cents, curr
         amount_cents=seat_quantity * price_per_seat_cents,
         currency=currency,
     )
+
+
+def create_checkout_session(order, success_url, cancel_url):
+    session = stripe.checkout.Session.create(
+        mode="payment",
+        payment_method_types=["card"],
+        line_items=[
+            {
+                "price_data": {
+                    "currency": order.currency,
+                    "unit_amount": order.amount_cents,
+                    "product_data": {
+                        "name": f"{order.seat_quantity} seat(s) — {order.organization.name}",
+                    },
+                },
+                "quantity": 1,
+            }
+        ],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={"order_id": str(order.id)},
+    )
+
+    order.stripe_checkout_session_id = session.id
+    order.save(update_fields=["stripe_checkout_session_id"])
+
+    return session
 
 
 def mark_order_paid(order, *, stripe_event_id, stripe_payment_intent_id, amount_cents):
@@ -44,7 +75,6 @@ def mark_order_paid(order, *, stripe_event_id, stripe_payment_intent_id, amount_
                 order.status = Order.Status.PAID
                 order.save(update_fields=["status", "seat_license"])
     except IntegrityError:
-        # نفس حدث Stripe وصل مرة ثانية — القيد رفض الإدخال المكرر، ما في شي نعمله.
         pass
 
     return order

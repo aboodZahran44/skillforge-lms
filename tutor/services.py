@@ -5,6 +5,9 @@ from pgvector.django import L2Distance
 
 from .models import LessonChunk
 
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+
 _CHUNK_SIZE = 500
 
 
@@ -70,3 +73,29 @@ def retrieve_relevant_chunks(course_id, question, enrollment, top_k=3):
         .order_by(L2Distance("embedding", question_vector))[:top_k]
     )
     return list(chunks)
+
+_SYSTEM_PROMPT = """You are a helpful tutor for an online course. Answer the
+student's question using ONLY the course material provided below. If the
+material doesn't contain the answer, say you don't have that information in
+the course content — do not use outside knowledge.
+
+Course material:
+{context}
+"""
+
+
+def ask_tutor(course_id, question, enrollment):
+    chunks = retrieve_relevant_chunks(course_id, question, enrollment)
+
+    if not chunks:
+        return "This course doesn't have any content indexed yet."
+
+    context = "\n\n".join(chunk.content for chunk in chunks)
+
+    chat = ChatOpenAI(model="gpt-4o-mini", api_key=settings.OPENAI_API_KEY, temperature=0)
+    messages = [
+        SystemMessage(content=_SYSTEM_PROMPT.format(context=context)),
+        HumanMessage(content=question),
+    ]
+    response = chat.invoke(messages)
+    return response.content

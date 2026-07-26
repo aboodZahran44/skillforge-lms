@@ -1,7 +1,6 @@
+import redis as redis_lib
 from django.conf import settings
 from django.test import TestCase
-
-import redis as redis_lib
 
 from tutor.services import RateLimitExceededError, check_and_increment_rate_limit
 

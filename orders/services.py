@@ -1,7 +1,12 @@
+from datetime import timedelta
+
 import stripe
 from django.apps import apps
 from django.conf import settings
 from django.db import IntegrityError, transaction
+from django.utils import timezone
+
+from orgs.services import revoke_seats_for_order
 
 from .models import Order, Payment
 
@@ -10,6 +15,14 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 class InvalidOrderAmountError(Exception):
     """Raised when the requested seat quantity is invalid."""
+
+
+class RefundWindowExpiredError(Exception):
+    """Raised when a refund is requested after the 14-day window."""
+
+
+class OrderNotRefundableError(Exception):
+    """Raised when the order isn't in a refundable state."""
 
 
 def create_pending_order(organization, seat_quantity, price_per_seat_cents, currency="usd"):
@@ -78,3 +91,17 @@ def mark_order_paid(order, *, stripe_event_id, stripe_payment_intent_id, amount_
         pass
 
     return order
+
+
+def refund_order(order):
+    if order.status != Order.Status.PAID:
+        raise OrderNotRefundableError(f"Order is '{order.status}', not 'paid'.")
+
+    if timezone.now() > order.created_at + timedelta(days=14):
+        raise RefundWindowExpiredError("Refund window (14 days) has expired.")
+
+    revoked_count = revoke_seats_for_order(order)
+    order.status = Order.Status.REFUNDED
+    order.save(update_fields=["status"])
+
+    return revoked_count

@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Count as models_Count
 
 from .models import SeatAssignment, SeatLicense
 
@@ -62,17 +63,31 @@ def get_org_dashboard_data(organization):
     total_seats = sum(lic.total_seats for lic in licenses)
     seats_used = sum(lic.seats_used for lic in licenses)
 
+    enrollments = list(
+        Enrollment.objects.for_org(organization).select_related("user", "course")
+    )
+
+    lesson_counts = dict(
+        LessonEvent.objects.filter(enrollment__in=enrollments)
+        .values("enrollment_id")
+        .annotate(count=models_Count("id"))
+        .values_list("enrollment_id", "count")
+    )
+
+    certified_enrollment_ids = set(
+        Certificate.objects.filter(attempt__enrollment__in=enrollments)
+        .values_list("attempt__enrollment_id", flat=True)
+    )
+
     employees = []
-    for enrollment in Enrollment.objects.for_org(organization).select_related("user", "course"):
-        lessons_completed = LessonEvent.objects.filter(enrollment=enrollment).count()
-        has_certificate = Certificate.objects.filter(attempt__enrollment=enrollment).exists()
+    for enrollment in enrollments:
         employees.append(
             {
                 "email": enrollment.user.email,
                 "full_name": enrollment.user.full_name,
                 "course": enrollment.course.title,
-                "lessons_completed": lessons_completed,
-                "certificate_earned": has_certificate,
+                "lessons_completed": lesson_counts.get(enrollment.id, 0),
+                "certificate_earned": enrollment.id in certified_enrollment_ids,
             }
         )
 

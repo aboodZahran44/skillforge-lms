@@ -15,10 +15,44 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.db import connection
+from django.http import JsonResponse
 from django.urls import include, path
+
+
+def health_check(request):
+    checks = {}
+    overall_ok = True
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {e}"
+        overall_ok = False
+
+    try:
+        import redis as redis_lib
+        from django.conf import settings
+
+        client = redis_lib.from_url(settings.REDIS_URL)
+        client.ping()
+        checks["redis"] = "ok"
+    except Exception as e:
+        checks["redis"] = f"error: {e}"
+        overall_ok = False
+
+    status_code = 200 if overall_ok else 503
+    return JsonResponse(
+        {"status": "ok" if overall_ok else "degraded", "checks": checks},
+        status=status_code,
+    )
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('healthz/', health_check, name='health-check'),
     path('api/', include('catalog.urls')),
     path('api/', include('orders.urls')),
     path('api/', include('tutor.urls')),

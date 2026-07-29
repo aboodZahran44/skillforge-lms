@@ -14,22 +14,18 @@ type Message =
 
 function errorMessage(err: unknown): Message {
   if (err instanceof ApiError) {
-    // Each documented failure gets its own human-readable rendering; the
-    // server's message is the source of truth where it exists.
-    switch (err.status) {
-      case 401:
-        return { kind: "error", status: 401, text: "You need to be logged in to ask the tutor." };
-      case 403:
-        return { kind: "error", status: 403, text: err.message };
-      case 400:
-        return { kind: "error", status: 400, text: err.message };
-      case 429:
-        return { kind: "error", status: 429, text: err.message };
-      default:
-        return { kind: "error", status: err.status, text: err.message };
+    // Errors from either service (Django token issuance or FastAPI chat)
+    // carry the failing response's own message.
+    if (err.status === 401 && err.message === "Authentication required.") {
+      return { kind: "error", status: 401, text: "You need to be logged in to ask the tutor." };
     }
+    return { kind: "error", status: err.status, text: err.message };
   }
-  return { kind: "error", status: null, text: "Could not reach the tutor. Check your connection and try again." };
+  return {
+    kind: "error",
+    status: null,
+    text: "Could not reach the tutor. Check your connection and try again.",
+  };
 }
 
 export default function TutorPage() {
@@ -38,28 +34,55 @@ export default function TutorPage() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [thinking, setThinking] = useState(false);
+  const [busy, setBusy] = useState(false); // whole ask cycle: token + stream
+  const [waiting, setWaiting] = useState(false); // no first chunk yet
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, thinking]);
+  }, [messages, waiting]);
+
+  function appendChunk(chunk: string, isFirst: boolean) {
+    if (isFirst) {
+      setWaiting(false);
+      setMessages((prev) => [...prev, { kind: "assistant", text: chunk }]);
+      return;
+    }
+    setMessages((prev) => {
+      const next = prev.slice();
+      const last = next[next.length - 1];
+      if (last?.kind === "assistant") {
+        next[next.length - 1] = { kind: "assistant", text: last.text + chunk };
+      }
+      return next;
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const question = input.trim();
-    if (question === "" || thinking) return;
+    if (question === "" || busy) return;
 
     setMessages((prev) => [...prev, { kind: "user", text: question }]);
     setInput("");
-    setThinking(true);
+    setBusy(true);
+    setWaiting(true);
     try {
-      const { answer } = await api.askTutor(courseId, question);
-      setMessages((prev) => [...prev, { kind: "assistant", text: answer }]);
+      // Fresh short-lived token per question — never cached across questions.
+      const { token } = await api.getTutorToken(courseId);
+      let started = false;
+      await api.streamTutorChat(courseId, token, question, (chunk) => {
+        appendChunk(chunk, !started);
+        started = true;
+      });
+      if (!started) {
+        setMessages((prev) => [...prev, { kind: "assistant", text: "(The tutor sent no answer.)" }]);
+      }
     } catch (err) {
       setMessages((prev) => [...prev, errorMessage(err)]);
     } finally {
-      setThinking(false);
+      setWaiting(false);
+      setBusy(false);
     }
   }
 
@@ -73,7 +96,7 @@ export default function TutorPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto rounded-lg border border-black/10 p-4 dark:border-white/15">
-        {messages.length === 0 && !thinking && (
+        {messages.length === 0 && !waiting && (
           <p className="mt-8 text-center text-sm text-black/40 dark:text-white/40">
             Ask a question about this course&apos;s content.
           </p>
@@ -89,9 +112,11 @@ export default function TutorPage() {
               );
             }
             if (msg.kind === "assistant") {
+              const isStreaming = busy && !waiting && i === messages.length - 1;
               return (
                 <div key={i} className="self-start max-w-[85%] whitespace-pre-wrap rounded-lg bg-black/5 px-4 py-2 text-sm dark:bg-white/10">
                   {msg.text}
+                  {isStreaming && <span className="ml-0.5 inline-block w-2 animate-pulse">▍</span>}
                 </div>
               );
             }
@@ -114,7 +139,7 @@ export default function TutorPage() {
             );
           })}
 
-          {thinking && (
+          {waiting && (
             <div className="self-start max-w-[85%] rounded-lg bg-black/5 px-4 py-2 text-sm text-black/50 dark:bg-white/10 dark:text-white/50">
               <span className="animate-pulse">Tutor is thinking…</span>
             </div>
@@ -129,12 +154,12 @@ export default function TutorPage() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask the tutor a question…"
           aria-label="Your question"
-          disabled={thinking}
+          disabled={busy}
           className="flex-1 rounded border border-black/20 bg-transparent px-4 py-2.5 outline-none focus:border-black/50 disabled:opacity-50 dark:border-white/25 dark:focus:border-white/60"
         />
         <button
           type="submit"
-          disabled={thinking || input.trim() === ""}
+          disabled={busy || input.trim() === ""}
           className="rounded bg-black px-5 py-2 text-sm font-medium text-white hover:bg-black/85 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/90"
         >
           Send

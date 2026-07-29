@@ -1,4 +1,5 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const TUTOR_API_BASE = process.env.NEXT_PUBLIC_TUTOR_API_BASE_URL ?? "http://localhost:8001";
 
 export class ApiError extends Error {
   constructor(
@@ -144,11 +145,79 @@ export function searchCourses(query: string, signal?: AbortSignal): Promise<Sear
   return request<SearchResponse>(`/api/courses/search?${params.toString()}`, { signal });
 }
 
-export function askTutor(courseId: string, question: string): Promise<{ answer: string }> {
-  return request<{ answer: string }>(`/api/courses/${courseId}/ask/`, {
+export interface TutorToken {
+  token: string;
+  expires_in_seconds: number;
+}
+
+// Tokens expire in 5 minutes — fetch a fresh one per question, never cache.
+export function getTutorToken(courseId: string): Promise<TutorToken> {
+  return request<TutorToken>(`/api/courses/${courseId}/tutor-token/`);
+}
+
+/**
+ * Streams the tutor's answer from the FastAPI service (different origin than
+ * Django). Native EventSource only supports GET without custom headers, so
+ * the SSE stream is read manually via fetch + ReadableStream.
+ *
+ * Calls onChunk for every `data: <text>` event until `data: [DONE]`.
+ */
+export async function streamTutorChat(
+  courseId: string,
+  token: string,
+  question: string,
+  onChunk: (text: string) => void,
+): Promise<void> {
+  const res = await fetch(`${TUTOR_API_BASE}/courses/${courseId}/chat`, {
     method: "POST",
-    body: { question },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ question }),
   });
+
+  if (!res.ok) {
+    // FastAPI errors use {"detail": ...}; Django-style {"error": ...} is
+    // handled too so both services map onto the same ApiError shape.
+    let message = `Request failed with status ${res.status}.`;
+    try {
+      const data = (await res.json()) as { detail?: unknown; error?: unknown };
+      if (typeof data.detail === "string") message = data.detail;
+      else if (typeof data.error === "string") message = data.error;
+    } catch {
+      // Non-JSON error body — keep the fallback message.
+    }
+    throw new ApiError(res.status, message);
+  }
+
+  if (!res.body) {
+    throw new ApiError(200, "The tutor service returned an empty stream.");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return;
+    buffer += decoder.decode(value, { stream: true });
+
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const rawEvent = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      for (const line of rawEvent.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        // Strip exactly the "data: " prefix — any further leading whitespace
+        // belongs to the payload (word spacing between chunks).
+        const payload = line.startsWith("data: ") ? line.slice(6) : line.slice(5);
+        if (payload === "[DONE]") return;
+        onChunk(payload);
+      }
+    }
+  }
 }
 
 export function getOrgDashboard(orgId: string): Promise<OrgDashboard> {
